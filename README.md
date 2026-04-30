@@ -236,4 +236,4 @@ Increase retries: `MAX_RETRIES=5 RETRY_DELAY_MS=5000 obsidian2remarkable sync-on
 
 ## License
 
-ISC
+MIT — see [LICENSE](LICENSE) for the full text.
