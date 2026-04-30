@@ -21,6 +21,7 @@ const makeState = (override: Partial<NoteState> = {}): NoteState => ({
   contentHash: "abc123",
   pdfPath: "/out/note.pdf",
   lastExportedAt: "2024-01-01T00:00:00.000Z",
+  remarkablePath: "Obsidian/note.pdf",
   uploadStatus: "uploaded",
   ...override,
 });
@@ -57,24 +58,30 @@ describe("Database", () => {
   test("isUpToDate returns true when hash matches and status is uploaded", () => {
     const db = new Database(dbPath);
     db.set(makeState({ contentHash: "hash1", uploadStatus: "uploaded" }));
-    expect(db.isUpToDate("/vault/note.md", "hash1")).toBe(true);
+    expect(db.isUpToDate("/vault/note.md", "hash1", "Obsidian/note.pdf")).toBe(true);
   });
 
   test("isUpToDate returns false when hash differs", () => {
     const db = new Database(dbPath);
     db.set(makeState({ contentHash: "hash1", uploadStatus: "uploaded" }));
-    expect(db.isUpToDate("/vault/note.md", "differenthash")).toBe(false);
+    expect(db.isUpToDate("/vault/note.md", "differenthash", "Obsidian/note.pdf")).toBe(false);
   });
 
   test("isUpToDate returns false when status is not uploaded", () => {
     const db = new Database(dbPath);
     db.set(makeState({ contentHash: "hash1", uploadStatus: "failed" }));
-    expect(db.isUpToDate("/vault/note.md", "hash1")).toBe(false);
+    expect(db.isUpToDate("/vault/note.md", "hash1", "Obsidian/note.pdf")).toBe(false);
   });
 
   test("isUpToDate returns false for unknown note", () => {
     const db = new Database(dbPath);
-    expect(db.isUpToDate("/vault/unknown.md", "hash1")).toBe(false);
+    expect(db.isUpToDate("/vault/unknown.md", "hash1", "Obsidian/note.pdf")).toBe(false);
+  });
+
+  test("isUpToDate returns false when remote path differs", () => {
+    const db = new Database(dbPath);
+    db.set(makeState({ contentHash: "hash1", remarkablePath: "Obsidian/flat.pdf" }));
+    expect(db.isUpToDate("/vault/note.md", "hash1", "Obsidian/folder/note.pdf")).toBe(false);
   });
 
   test("handles corrupt JSON file gracefully", () => {

@@ -19,6 +19,8 @@ export interface NoteState {
   remarkableId?: string;
   /** reMarkable document name as uploaded */
   remarkableName?: string;
+  /** Full remote path used on reMarkable */
+  remarkablePath?: string;
   /** Upload status */
   uploadStatus: "pending" | "uploaded" | "failed";
   /** Last error message */
@@ -82,10 +84,11 @@ export class Database {
    * Returns true if the note's contentHash matches the stored one,
    * meaning no re-processing is needed.
    */
-  isUpToDate(sourcePath: string, contentHash: string): boolean {
+  isUpToDate(sourcePath: string, contentHash: string, remarkablePath?: string): boolean {
     const stored = this.get(sourcePath);
     return stored !== undefined &&
       stored.contentHash === contentHash &&
+      stored.remarkablePath === remarkablePath &&
       stored.uploadStatus === "uploaded";
   }
 }

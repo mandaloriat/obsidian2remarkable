@@ -9,8 +9,6 @@ import { Database } from "./database.js";
 import { runSync } from "./sync.js";
 import { logger } from "./logger.js";
 
-const DEBOUNCE_MS = 2000;
-
 /**
  * Watch the vault for changes and sync on modification.
  */
@@ -19,9 +17,9 @@ export async function watchVault(config: Config, db: Database): Promise<void> {
   const { default: chokidar } = await import("chokidar");
 
   const inboxPath = path.join(config.vaultPath, config.inboxDir);
-  const watchPaths = [inboxPath];
+  const watchPaths = config.scanAllVault ? [config.vaultPath] : [inboxPath];
 
-  if (config.scanFrontmatter) {
+  if (!config.scanAllVault && config.scanFrontmatter) {
     watchPaths.push(config.vaultPath);
   }
 
@@ -39,26 +37,71 @@ export async function watchVault(config: Config, db: Database): Promise<void> {
 
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
   const pendingFiles = new Set<string>();
+  let syncInProgress = false;
+  let lastSyncCompletedAt = 0;
 
-  function scheduleSync(filePath: string): void {
-    if (!filePath.endsWith(".md")) return;
-    pendingFiles.add(filePath);
-    if (debounceTimer) clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(async () => {
-      logger.info(`Change detected (${pendingFiles.size} file(s)) – syncing...`);
-      pendingFiles.clear();
-      try {
-        const result = await runSync(config, db);
-        logger.info(
-          `Sync complete: ${result.uploaded} uploaded, ` +
-          `${result.skipped} skipped, ` +
-          `${result.failed} failed`
-        );
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        logger.error(`Sync error: ${msg}`);
+  async function runPendingSync(): Promise<void> {
+    debounceTimer = null;
+
+    if (syncInProgress || pendingFiles.size === 0) {
+      return;
+    }
+
+    const now = Date.now();
+    const cooldownRemaining = Math.max(
+      0,
+      lastSyncCompletedAt + config.watchCooldownMs - now
+    );
+
+    if (cooldownRemaining > 0) {
+      logger.info(
+        `Watch cooldown active – next sync in ${Math.ceil(cooldownRemaining / 1000)}s`
+      );
+      debounceTimer = setTimeout(() => {
+        void runPendingSync();
+      }, cooldownRemaining);
+      return;
+    }
+
+    syncInProgress = true;
+    const changedFiles = pendingFiles.size;
+    pendingFiles.clear();
+
+    logger.info(`Change detected (${changedFiles} file(s)) – syncing...`);
+    try {
+      const result = await runSync(config, db);
+      logger.info(
+        `Sync complete: ${result.uploaded} uploaded, ` +
+        `${result.skipped} skipped, ` +
+        `${result.failed} failed`
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.error(`Sync error: ${msg}`);
+    } finally {
+      lastSyncCompletedAt = Date.now();
+      syncInProgress = false;
+
+      if (pendingFiles.size > 0) {
+        scheduleSync();
       }
-    }, DEBOUNCE_MS);
+    }
+  }
+
+  function scheduleSync(filePath?: string): void {
+    if (filePath) {
+      if (!filePath.endsWith(".md")) return;
+      pendingFiles.add(filePath);
+    }
+
+    if (pendingFiles.size === 0 || syncInProgress) {
+      return;
+    }
+
+    if (debounceTimer) clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => {
+      void runPendingSync();
+    }, config.watchDebounceMs);
   }
 
   watcher

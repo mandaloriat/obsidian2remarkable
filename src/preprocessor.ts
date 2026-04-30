@@ -12,7 +12,6 @@
 import fs from "fs";
 import path from "path";
 import crypto from "crypto";
-import matter from "gray-matter";
 import { NoteCandidate } from "./scanner.js";
 
 export interface ProcessedNote {
@@ -150,7 +149,7 @@ function resolveImageEmbeds(
 // Callout conversion
 // ------------------------------------------------------------------
 
-const CALLOUT_REGEX = /^> \[!([\w-]+)\][+\-]?\s*(.*)/;
+const CALLOUT_REGEX = /^> \[!([\w-]+)\][+-]?\s*(.*)/;
 
 /**
  * Convert Obsidian callout blocks to readable blockquotes.
@@ -191,7 +190,7 @@ function convertCallouts(body: string): string {
  * Normalise non-standard checkboxes to plain list items with a label.
  */
 function normaliseCheckboxes(body: string): string {
-  return body.replace(/^(\s*[-*])\s+\[([^\[\] ])\]\s+/gm, (_m, bullet, state) => {
+  return body.replace(/^(\s*[-*])\s+\[([^[\] ])\]\s+/gm, (_m, bullet, state) => {
     const label =
       state === "x" ? "[x] " :
       state === "/" ? "[~] " :

@@ -4,7 +4,8 @@ A local service that automatically exports Markdown notes from an [Obsidian](htt
 
 ## Features
 
-- 📁 **Two selection modes**: monitor a dedicated inbox folder (`remarkable-inbox/`) or tag individual notes with `remarkable: true` frontmatter
+- 📁 **Three selection modes**: sync the whole vault, monitor a dedicated inbox folder (`remarkable-inbox/`), or tag individual notes with `remarkable: true` frontmatter
+- 🗂 **Vault hierarchy preserved**: uploaded PDFs are placed under matching subfolders inside the target reMarkable folder
 - 🔄 **Idempotent sync**: content-hashed state database skips unchanged notes
 - 📄 **Obsidian-aware conversion**: resolves `[[wikilinks]]`, `![[image embeds]]`, callouts, and checkboxes before converting to PDF
 - 📤 **reMarkable Cloud upload** via [`rmapi-js`](https://github.com/erikbrinkman/rmapi-js) (no SSH, no direct tablet access)
@@ -20,8 +21,25 @@ A local service that automatically exports Markdown notes from an [Obsidian](htt
 | Node.js ≥ 18 | Runtime |
 | [Pandoc](https://pandoc.org/installing.html) | PDF generation (recommended) |
 | LaTeX distribution | Required by Pandoc for PDF output (e.g. `texlive-xetex`) |
+| Python 3 + WeasyPrint *(optional)* | Easier PDF engine on ARM or when LaTeX is problematic |
 
 > **Note:** If Pandoc is not installed, the tool falls back to `md-to-pdf` (a pure Node.js engine). PDF quality will be lower but no system dependencies are needed.
+
+### Install WeasyPrint (recommended on ARM / headless machines)
+
+If your host has trouble with LaTeX or Puppeteer's bundled browser, install a local WeasyPrint engine inside the project:
+
+```bash
+npm run setup:weasyprint
+```
+
+Then set:
+
+```bash
+PANDOC_PDF_ENGINE=.venv-weasyprint/bin/weasyprint
+```
+
+Pandoc accepts either an engine name or a full path to the engine binary.
 
 ### Install Pandoc (recommended)
 
@@ -65,11 +83,21 @@ The device token is saved in `.credentials/remarkable.token` (mode 600, never co
 
 ### 2. Mark notes for export
 
-**Option A – Inbox folder**
+**Option A – Whole vault**
+
+Set:
+
+```bash
+SCAN_ALL_VAULT=true
+```
+
+and every Markdown note in the vault will be exported.
+
+**Option B – Inbox folder**
 
 Drop any `.md` file into `<vault>/remarkable-inbox/` and it will be picked up automatically.
 
-**Option B – Frontmatter tag**
+**Option C – Frontmatter tag**
 
 Add `remarkable: true` to the YAML frontmatter of any note:
 
@@ -89,7 +117,7 @@ Note content here…
 VAULT_PATH=/path/to/vault obsidian2remarkable sync-once
 ```
 
-PDFs are cached in `.remarkable-export/out/` and the document appears in the **Obsidian** folder on your reMarkable.
+PDFs are cached in `.remarkable-export/out/` and the document appears in the matching subfolder tree under **Obsidian** on your reMarkable.
 
 ## CLI Reference
 
@@ -143,13 +171,16 @@ All settings can be provided via **environment variables** or **CLI flags**:
 | `REMARKABLE_FOLDER` | `--folder` | `Obsidian` | Target folder in reMarkable |
 | `PDF_PREFIX` | — | `Obsidian - ` | Prefix added to PDF filenames |
 | `INBOX_DIR` | — | `remarkable-inbox` | Inbox subfolder in vault |
+| `SCAN_ALL_VAULT` | — | `false` | Export every Markdown note in the vault |
 | `SCAN_FRONTMATTER` | — | `true` | Scan vault for `remarkable: true` |
 | `PANDOC_BIN` | — | `pandoc` | Path to Pandoc binary |
-| `PANDOC_PDF_ENGINE` | — | *(auto)* | PDF engine: `xelatex`, `weasyprint`, etc. |
+| `PANDOC_PDF_ENGINE` | — | *(auto)* | PDF engine name or binary path: `xelatex`, `weasyprint`, `.venv-weasyprint/bin/weasyprint`, etc. |
 | `PAGE_GEOMETRY` | — | `a4paper,top=2cm,…` | Pandoc geometry string |
 | `FONT_SIZE` | — | `11pt` | Base font size |
 | `MAX_RETRIES` | — | `3` | Upload retry attempts |
 | `RETRY_DELAY_MS` | — | `2000` | Initial retry delay (ms) |
+| `WATCH_DEBOUNCE_MS` | — | `2000` | Wait after the last file change before a watch sync starts |
+| `WATCH_COOLDOWN_MS` | — | `0` | Minimum pause between completed watch sync runs |
 | `LOG_LEVEL` | `--log-level` | `info` | Log verbosity |
 
 ## Markdown Feature Support
@@ -212,6 +243,9 @@ The upload layer is isolated behind a simple `uploadPdfWithRetry()` interface. T
 ```bash
 # Watch mode build
 npm run build:watch
+
+# Install local WeasyPrint PDF engine
+npm run setup:weasyprint
 
 # Run tests
 npm test

@@ -3,9 +3,10 @@
  * Discovers Obsidian Markdown notes that should be exported to reMarkable.
  *
  * Selection criteria (applied in order):
- *  1. All .md files inside `<vaultPath>/<inboxDir>/`
- *  2. (When scanFrontmatter is true) Any .md file in the vault with `remarkable: true`
- *     or `remarkable: yes` in its YAML frontmatter.
+ *  1. (When scanAllVault is true) All .md files in the vault
+ *  2. All .md files inside `<vaultPath>/<inboxDir>/`
+ *  3. (When scanFrontmatter is true) Any .md file in the vault with
+ *     `remarkable: true` or `remarkable: yes` in its YAML frontmatter.
  */
 
 import fs from "fs";
@@ -73,13 +74,21 @@ export function scanVault(config: Config): NoteCandidate[] {
     candidates.push(parseNote(resolved));
   }
 
-  // 1. Inbox directory
+  // 1. Whole vault
+  if (config.scanAllVault) {
+    for (const file of walkMarkdown(config.vaultPath)) {
+      add(file);
+    }
+    return candidates;
+  }
+
+  // 2. Inbox directory
   const inboxPath = path.join(config.vaultPath, config.inboxDir);
   for (const file of walkMarkdown(inboxPath)) {
     add(file);
   }
 
-  // 2. Frontmatter scan
+  // 3. Frontmatter scan
   if (config.scanFrontmatter) {
     for (const file of walkMarkdown(config.vaultPath)) {
       // Skip files already added from inbox

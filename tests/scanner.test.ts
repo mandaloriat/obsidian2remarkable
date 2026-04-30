@@ -25,6 +25,7 @@ function makeConfig(override: Partial<Config> = {}): Config {
   return {
     vaultPath: tmpDir,
     inboxDir: "remarkable-inbox",
+    scanAllVault: false,
     scanFrontmatter: true,
     outputDir: path.join(tmpDir, "out"),
     credentialsDir: path.join(tmpDir, ".credentials"),
@@ -37,6 +38,8 @@ function makeConfig(override: Partial<Config> = {}): Config {
     pandocPdfEngine: "",
     pageGeometry: "a4paper",
     fontSize: "11pt",
+    watchDebounceMs: 2000,
+    watchCooldownMs: 0,
     ...override,
   };
 }
@@ -129,5 +132,29 @@ describe("scanVault", () => {
     const results = scanVault(config);
     expect(results[0].body).toContain("Just the body");
     expect(results[0].body).not.toContain("title:");
+  });
+
+  test("picks up every markdown note when scanAllVault=true", () => {
+    writeNote("notes/a.md", "# A");
+    writeNote("notes/sub/b.md", "# B");
+    writeNote("remarkable-inbox/c.md", "# C");
+
+    const config = makeConfig({ scanAllVault: true, scanFrontmatter: false });
+    const results = scanVault(config);
+
+    expect(results).toHaveLength(3);
+    expect(results.map((note) => note.title).sort()).toEqual(["a", "b", "c"]);
+  });
+
+  test("ignores non-markdown files when scanAllVault=true", () => {
+    writeNote("notes/a.md", "# A");
+    writeNote("notes/image.png", "binary");
+    writeNote("notes/plain.txt", "text");
+
+    const config = makeConfig({ scanAllVault: true });
+    const results = scanVault(config);
+
+    expect(results).toHaveLength(1);
+    expect(results[0].title).toBe("a");
   });
 });

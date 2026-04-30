@@ -13,6 +13,7 @@
     "lint": "eslint src tests",
     "test": "jest",
     "test:watch": "jest --watch",
+    "setup:weasyprint": "python3 -m venv .venv-weasyprint && .venv-weasyprint/bin/pip install -r requirements-weasyprint.txt",
     "prepublishOnly": "npm run build"
   },
   "keywords": [

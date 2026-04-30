@@ -11,6 +11,8 @@ export interface Config {
   vaultPath: string;
   /** Subdirectory inside the vault to watch (relative to vaultPath) */
   inboxDir: string;
+  /** If true, export every Markdown note in the vault */
+  scanAllVault: boolean;
   /** If true, also scan the entire vault for notes with remarkable:true frontmatter */
   scanFrontmatter: boolean;
   /** Directory where generated PDFs are cached (relative to cwd or absolute) */
@@ -25,6 +27,10 @@ export interface Config {
   maxRetries: number;
   /** Base delay (ms) between retries */
   retryDelayMs: number;
+  /** Delay after the last file change before watch mode starts a sync */
+  watchDebounceMs: number;
+  /** Minimum pause between completed watch sync runs */
+  watchCooldownMs: number;
   /** Path to state/idempotency database file */
   stateDbPath: string;
   /** Pandoc binary path (defaults to system pandoc) */
@@ -75,6 +81,9 @@ export function loadConfig(overrides: Partial<Config> = {}): Config {
   return {
     vaultPath: resolveDir(vaultPath),
     inboxDir: overrides.inboxDir ?? process.env.INBOX_DIR ?? "remarkable-inbox",
+    scanAllVault:
+      overrides.scanAllVault ??
+      (process.env.SCAN_ALL_VAULT === "true"),
     scanFrontmatter:
       overrides.scanFrontmatter ??
       (process.env.SCAN_FRONTMATTER !== "false"),
@@ -91,6 +100,12 @@ export function loadConfig(overrides: Partial<Config> = {}): Config {
     retryDelayMs:
       overrides.retryDelayMs ??
       parseInt(process.env.RETRY_DELAY_MS ?? "2000", 10),
+    watchDebounceMs:
+      overrides.watchDebounceMs ??
+      parseInt(process.env.WATCH_DEBOUNCE_MS ?? "2000", 10),
+    watchCooldownMs:
+      overrides.watchCooldownMs ??
+      parseInt(process.env.WATCH_COOLDOWN_MS ?? "0", 10),
     stateDbPath,
     pandocBin: overrides.pandocBin ?? process.env.PANDOC_BIN ?? "pandoc",
     pandocPdfEngine:

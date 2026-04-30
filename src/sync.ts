@@ -31,10 +31,43 @@ export interface SyncResult {
  * Build the document name for a note as it will appear in reMarkable.
  */
 function buildDocumentName(candidate: NoteCandidate, config: Config): string {
-  const safeName = candidate.title
-    .replace(/[<>:"/\\|?*\x00-\x1f]/g, "_")
-    .trim();
+  const safeName = sanitizePathSegment(candidate.title);
   return `${config.pdfPrefix}${safeName}`;
+}
+
+function buildRemoteFolderPath(candidate: NoteCandidate, config: Config): string[] {
+  const relativePath = path.relative(config.vaultPath, candidate.filePath);
+  const relativeDir = path.dirname(relativePath);
+
+  if (!relativeDir || relativeDir === ".") {
+    return [];
+  }
+
+  return relativeDir
+    .split(path.sep)
+    .filter(Boolean)
+    .map(sanitizePathSegment);
+}
+
+function buildRemoteDocumentPath(
+  candidate: NoteCandidate,
+  config: Config,
+  documentName: string
+): string {
+  const remoteFolderPath = buildRemoteFolderPath(candidate, config);
+  return path.posix.join(
+    config.remarkableFolder,
+    ...remoteFolderPath,
+    `${documentName}.pdf`
+  );
+}
+
+function sanitizePathSegment(value: string): string {
+  return Array.from(value, (char) => {
+    const code = char.charCodeAt(0);
+    if (code <= 31) return "_";
+    return /[<>:"/\\|?*]/.test(char) ? "_" : char;
+  }).join("").trim();
 }
 
 /**
@@ -49,9 +82,11 @@ async function processNote(
 ): Promise<{ skipped: boolean; state: NoteState }> {
   const processed = preprocessNote(candidate, config.vaultPath);
   const documentName = buildDocumentName(candidate, config);
+  const remoteFolderPath = buildRemoteFolderPath(candidate, config);
+  const remoteDocumentPath = buildRemoteDocumentPath(candidate, config, documentName);
 
   // Idempotency check
-  if (!options.force && db.isUpToDate(candidate.filePath, processed.contentHash)) {
+  if (!options.force && db.isUpToDate(candidate.filePath, processed.contentHash, remoteDocumentPath)) {
     logger.debug(`Skipping unchanged: ${candidate.filePath}`);
     return {
       skipped: true,
@@ -62,7 +97,7 @@ async function processNote(
   const now = new Date().toISOString();
 
   if (options.dryRun) {
-    logger.info(`[dry-run] Would export: "${candidate.title}" → "${documentName}.pdf"`);
+    logger.info(`[dry-run] Would export: "${candidate.title}" → "${remoteDocumentPath}"`);
     return {
       skipped: false,
       state: {
@@ -70,6 +105,7 @@ async function processNote(
         contentHash: processed.contentHash,
         pdfPath: path.join(config.outputDir, `${documentName}.pdf`),
         lastExportedAt: now,
+        remarkablePath: remoteDocumentPath,
         uploadStatus: "pending",
       },
     };
@@ -80,8 +116,8 @@ async function processNote(
   logger.info(`Converted: "${candidate.title}" → ${pdfPath}`);
 
   // Upload to reMarkable
-  const uploadResult = await uploadPdfWithRetry(pdfPath, documentName, config);
-  logger.info(`Uploaded: "${documentName}" (id: ${uploadResult.documentId})`);
+  const uploadResult = await uploadPdfWithRetry(pdfPath, documentName, remoteFolderPath, config);
+  logger.info(`Uploaded: "${remoteDocumentPath}" (id: ${uploadResult.documentId})`);
 
   const state: NoteState = {
     sourcePath: candidate.filePath,
@@ -90,6 +126,7 @@ async function processNote(
     lastExportedAt: now,
     remarkableId: uploadResult.documentId,
     remarkableName: uploadResult.documentName,
+    remarkablePath: remoteDocumentPath,
     uploadStatus: "uploaded",
   };
 
@@ -156,6 +193,7 @@ export async function runSync(
           lastExportedAt: existing?.lastExportedAt ?? new Date().toISOString(),
           remarkableId: existing?.remarkableId,
           remarkableName: existing?.remarkableName,
+          remarkablePath: existing?.remarkablePath,
           uploadStatus: "failed",
           lastError: errMsg,
         });

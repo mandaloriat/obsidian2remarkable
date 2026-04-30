@@ -42,7 +42,7 @@ export async function isPandocAvailable(pandocBin: string): Promise<boolean> {
  * Build the complete Markdown document (YAML front-matter + body) that
  * Pandoc will render as a PDF.
  */
-function buildPandocInput(note: ProcessedNote, config: Config): string {
+function buildPandocInput(note: ProcessedNote): string {
   const fm: Record<string, unknown> = {
     title: note.candidate.title,
     ...note.candidate.frontmatter,
@@ -78,7 +78,7 @@ async function convertWithPandoc(
   pdfPath: string,
   config: Config
 ): Promise<void> {
-  const inputDoc = buildPandocInput(note, config);
+  const inputDoc = buildPandocInput(note);
   const inputFile = pdfPath.replace(/\.pdf$/, ".md.tmp");
 
   fs.writeFileSync(inputFile, inputDoc, "utf-8");
@@ -115,7 +115,6 @@ async function convertWithMdToPdf(
   pdfPath: string
 ): Promise<void> {
   // Dynamically import md-to-pdf so it does not crash if missing
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { mdToPdf } = await import("md-to-pdf");
 
   const content = `# ${note.candidate.title}\n\n${note.processedBody}`;
@@ -152,9 +151,7 @@ export async function convertToPdf(
   config: Config
 ): Promise<ConvertResult> {
   // Build a safe filename from the title
-  const safeName = note.candidate.title
-    .replace(/[<>:"/\\|?*\x00-\x1f]/g, "_")
-    .trim();
+  const safeName = sanitizeFileComponent(note.candidate.title);
   const pdfFileName = `${config.pdfPrefix}${safeName}.pdf`;
   const pdfPath = path.join(config.outputDir, pdfFileName);
 
@@ -167,7 +164,16 @@ export async function convertToPdf(
 
   if (pandocAvailable) {
     logger.debug(`Converting "${note.candidate.title}" with Pandoc`);
-    await convertWithPandoc(note, pdfPath, config);
+    try {
+      await convertWithPandoc(note, pdfPath, config);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.warn(
+        "Pandoc conversion failed – falling back to md-to-pdf. " +
+        `Install the full PDF engine stack for better output. (${msg})`
+      );
+      await convertWithMdToPdf(note, pdfPath);
+    }
   } else {
     logger.warn(
       "Pandoc not found – falling back to md-to-pdf. " +
@@ -177,4 +183,12 @@ export async function convertToPdf(
   }
 
   return { pdfPath };
+}
+
+function sanitizeFileComponent(value: string): string {
+  return Array.from(value, (char) => {
+    const code = char.charCodeAt(0);
+    if (code <= 31) return "_";
+    return /[<>:"/\\|?*]/.test(char) ? "_" : char;
+  }).join("").trim();
 }
