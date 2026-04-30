@@ -1,0 +1,40 @@
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+
+# reMarkable credentials (never commit these)
+.credentials/
+*.token
+*.jwt
+
+# PDF output cache
+.remarkable-export/
+
+# SQLite database
+*.db
+*.db-shm
+*.db-wal
+
+# State database
+state.json
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
