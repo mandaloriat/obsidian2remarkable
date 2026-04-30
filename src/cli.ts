@@ -67,7 +67,7 @@ program
       const result = await runSync(config, db);
       printSummary(result);
       // Then watch
-      watchVault(config, db);
+      await watchVault(config, db);
     } catch (err) {
       fatal(err);
     }

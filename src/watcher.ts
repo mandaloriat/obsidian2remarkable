@@ -4,7 +4,6 @@
  */
 
 import path from "path";
-import chokidar from "chokidar";
 import { Config } from "./config.js";
 import { Database } from "./database.js";
 import { runSync } from "./sync.js";
@@ -15,7 +14,10 @@ const DEBOUNCE_MS = 2000;
 /**
  * Watch the vault for changes and sync on modification.
  */
-export function watchVault(config: Config, db: Database): void {
+export async function watchVault(config: Config, db: Database): Promise<void> {
+  // Dynamic import because chokidar v5+ is ESM-only
+  const { default: chokidar } = await import("chokidar");
+
   const inboxPath = path.join(config.vaultPath, config.inboxDir);
   const watchPaths = [inboxPath];
 
@@ -62,7 +64,7 @@ export function watchVault(config: Config, db: Database): void {
   watcher
     .on("add", scheduleSync)
     .on("change", scheduleSync)
-    .on("error", (err) => logger.error(`Watcher error: ${err}`));
+    .on("error", (err: unknown) => logger.error(`Watcher error: ${err}`));
 
   // Handle graceful shutdown
   process.on("SIGINT", () => {

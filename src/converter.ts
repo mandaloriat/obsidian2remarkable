@@ -56,7 +56,9 @@ function buildPandocInput(note: ProcessedNote, config: Config): string {
   for (const [key, value] of Object.entries(fm)) {
     if (value === undefined) continue;
     if (typeof value === "string") {
-      yamlLines.push(`${key}: "${value.replace(/"/g, '\\"')}"`);
+      // Escape backslashes first, then double quotes to produce valid YAML double-quoted strings
+      const escaped = value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+      yamlLines.push(`${key}: "${escaped}"`);
     } else if (Array.isArray(value)) {
       yamlLines.push(`${key}:`);
       for (const item of value) {
